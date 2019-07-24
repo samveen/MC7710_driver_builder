@@ -4,7 +4,7 @@
 #rm -fR GobiNet GobiSerial
 
 # untar everything again
-#tar xzf SierraLinuxQMIdriversS2.37N2.57.tar.gz
+#tar xzf SierraLinuxQMIdriversS2.37N2.58.tar.gz
 
 # file list
 FILELIST=$(find /usr/src/linux-headers-$(uname -r|sed 's/-generic//') -name memcontrol.h)
