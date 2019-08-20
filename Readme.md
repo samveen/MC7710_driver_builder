@@ -7,6 +7,11 @@ QMI USB Drivers for the Sierra Airprime series.
 This is the preliminary framework I wrote up to atleast automate the process of 
 building and installing the modules. Future TODO is to do Full DKMS-ization of the build.
 
+# Licensing
+
+- All driver code is copyright of their respective owners under their licensing
+- My code is licensed under a modified BSD license as detailed in the LICENSE file
+
 ## Requirements
 
 - Recent modern [Bash](https://www.gnu.org/software/bash/)
