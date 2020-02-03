@@ -33,15 +33,15 @@ make -C GobiNet
 make -C GobiSerial
 
 # install
-sudo install Gobi*/*.ko -t /lib/modules/$(uname -r)/updates/dkms/
+#sudo install Gobi*/*.ko -t /lib/modules/$(uname -r)/updates/dkms/
 
 # Rebuild module dependencies
-sudo depmod
+#sudo depmod
 
 # undo all changes
 for f in $FILELIST; do
     sudo mv ${f}.bak ${f}
 done
 sed -i 's!^/\* \(#define MEMCG_NOT_FIX\) \*/$!\1!' GobiNet/GobiUSBNet.c
-make -C GobiNet clean
-make -C GobiSerial clean
+#make -C GobiNet clean
+#make -C GobiSerial clean
