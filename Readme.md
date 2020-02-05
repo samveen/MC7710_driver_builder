@@ -52,6 +52,9 @@ sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60 --all
 sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.39N2.60
 ```
 
+## TODO
+- Add kernel module signing for secure boot (Needs some research in Machine owner keys, via mokutil maybe).
+
 ## Notes
 
 - The driver version in this repo is `S2.39N2.60` (latest as of February 03, 2020).
