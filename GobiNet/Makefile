@@ -1,8 +1,11 @@
 obj-m := GobiNet.o
 GobiNet-objs := GobiUSBNet.o QMIDevice.o QMI.o
-KDIR := /lib/modules/$(shell uname -r)/build
+ifndef kernelver
+	kernelver=$(shell uname -r)
+endif
+KDIR := /lib/modules/$(kernelver)/build
 PWD := $(shell pwd)
-OUTPUTDIR=/lib/modules/`uname -r`/kernel/drivers/net/usb/
+OUTPUTDIR=/lib/modules/$(kernelver)/kernel/drivers/net/usb/
 #KBUILD_CFLAGS += -DQOS_SIMULATE
 #KBUILD_CFLAGS += -DTX_XMIT_SIERRA -DTX_URB_MONITOR
 ifdef TX_URB_MONITOR

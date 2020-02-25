@@ -1,5 +1,8 @@
 #!/bin/bash
 
+if [[ -z ${kernelver} ]]; then
+    kernelver=$(uname -r)
+fi
 # Cleanup old
 #rm -fR GobiNet GobiSerial
 
@@ -7,7 +10,7 @@
 #tar xzf SierraLinuxQMIdriversS2.37N2.58.tar.gz
 
 # file list
-FILELIST=$(find /usr/src/linux-headers-$(uname -r|sed 's/-generic//') -name memcontrol.h)
+FILELIST=$(find /usr/src/linux-headers-${kernelver} -follow -name memcontrol.h)
 
 # For function 'task_in_memcg_oom' in memcontrol.h replace 
 #    'return p->memcg_in_oom;'
@@ -33,7 +36,7 @@ make -C GobiNet
 make -C GobiSerial
 
 # install
-#sudo install Gobi*/*.ko -t /lib/modules/$(uname -r)/updates/dkms/
+#sudo install Gobi*/*.ko -t /lib/modules/${kernelver}/updates/dkms/
 
 # Rebuild module dependencies
 #sudo depmod

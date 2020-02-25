@@ -1,7 +1,10 @@
 obj-m := GobiSerial.o
-KDIR := /lib/modules/$(shell uname -r)/build
+ifndef kernelver
+	kernelver=$(shell uname -r)
+endif
+KDIR := /lib/modules/$(kernelver)/build
 PWD := $(shell pwd)
-OUTPUTDIR=/lib/modules/`uname -r`/kernel/drivers/usb/serial/
+OUTPUTDIR=/lib/modules/$(kernelver)/kernel/drivers/usb/serial/
 
 PI_KDIR := ~/k/linux-rpi-3.6.y
 PI_CCPREFIX=~/toolchain/rpi/tools-master/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin/arm-bcm2708-linux-gnueabi- 

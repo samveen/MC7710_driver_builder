@@ -20,7 +20,8 @@ building and installing the modules. Future TODO is to do Full DKMS-ization of t
 
 # Tested build environment
 
-- [Lenovo Thinkpad x230](https://www.lenovo.com/gb/en/laptops/thinkpad/x-series/x230/) running [Xubuntu "18.04.3 LTS (Bionic Beaver)"](https://xubuntu.org/download) with `dkms` version `2.3-3ubuntu9.7` and linux kernel version 5.3.0 via `updates` apt repo (package `linux-image-5.3.0-28-generic` version `5.3.0-28.30~18.04.1` for arch `amd64`).
+- [Lenovo Thinkpad x230](https://www.lenovo.com/gb/en/laptops/thinkpad/x-series/x230/) running [Xubuntu "18.04.4 LTS (Bionic Beaver)"](https://xubuntu.org/download) with `dkms` version `2.3-3ubuntu9.7` and linux kernel version 5.3.0 via `updates` apt repo (package `linux-image-5.3.0-40-generic` version `5.3.0-40.32~18.04.1` for arch `amd64`).
+
 
 # Build Instructions
 
