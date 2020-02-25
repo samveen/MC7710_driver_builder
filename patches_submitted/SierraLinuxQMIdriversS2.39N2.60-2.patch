@@ -1,0 +1,35 @@
+diff --git a/GobiNet/Makefile b/GobiNet/Makefile
+index 8cb8997..d4588ff 100644
+--- a/GobiNet/Makefile
++++ b/GobiNet/Makefile
+@@ -1,8 +1,11 @@
+ obj-m := GobiNet.o
+ GobiNet-objs := GobiUSBNet.o QMIDevice.o QMI.o
+-KDIR := /lib/modules/$(shell uname -r)/build
++ifndef kernelver
++	kernelver=$(shell uname -r)
++endif
++KDIR := /lib/modules/$(kernelver)/build
+ PWD := $(shell pwd)
+-OUTPUTDIR=/lib/modules/`uname -r`/kernel/drivers/net/usb/
++OUTPUTDIR=/lib/modules/$(kernelver)/kernel/drivers/net/usb/
+ #KBUILD_CFLAGS += -DQOS_SIMULATE
+ #KBUILD_CFLAGS += -DTX_XMIT_SIERRA -DTX_URB_MONITOR
+ ifdef TX_URB_MONITOR
+diff --git a/GobiSerial/Makefile b/GobiSerial/Makefile
+index 2ddf72b..f92670e 100644
+--- a/GobiSerial/Makefile
++++ b/GobiSerial/Makefile
+@@ -1,7 +1,10 @@
+ obj-m := GobiSerial.o
+-KDIR := /lib/modules/$(shell uname -r)/build
++ifndef kernelver
++	kernelver=$(shell uname -r)
++endif
++KDIR := /lib/modules/$(kernelver)/build
+ PWD := $(shell pwd)
+-OUTPUTDIR=/lib/modules/`uname -r`/kernel/drivers/usb/serial/
++OUTPUTDIR=/lib/modules/$(kernelver)/kernel/drivers/usb/serial/
+ 
+ PI_KDIR := ~/k/linux-rpi-3.6.y
+ PI_CCPREFIX=~/toolchain/rpi/tools-master/arm-bcm2708/arm-bcm2708-linux-gnueabi/bin/arm-bcm2708-linux-gnueabi- 

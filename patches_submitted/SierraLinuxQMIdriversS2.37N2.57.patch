@@ -1,0 +1,22 @@
+diff --git a/GobiNet/Makefile b/GobiNet/Makefile
+index af30580..cc55658 100644
+--- a/GobiNet/Makefile
++++ b/GobiNet/Makefile
+@@ -70,6 +70,6 @@ install: all
+ 	depmod
+ 
+ clean:
+-	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions Module.* modules.order .cache.mk
++	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions Module.* modules.order .cache.mk *.o.ur-safe
+ 
+ 
+diff --git a/GobiSerial/Makefile b/GobiSerial/Makefile
+index 532ddab..1349af8 100644
+--- a/GobiSerial/Makefile
++++ b/GobiSerial/Makefile
+@@ -48,4 +48,4 @@ install: all
+ 	depmod
+ 
+ clean:
+-	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions Module.* modules.order .cache.mk
++	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions Module.* modules.order .cache.mk *.o.ur-safe
