@@ -1,0 +1,59 @@
+# Sierra Linux QMI drivers builder
+
+- Process of building and installing kernel modules using Dynamic Kernel Module Support (DKMS)
+
+# Licensing
+
+- This program is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License version 2 and only version 2 as
+published by the Free Software Foundation.
+
+# Requirements
+
+- Recent modern [Bash](https://www.gnu.org/software/bash/)
+- Recent version of [DKMS](https://github.com/dell/dkms)
+- All the other requirements as listed on the [driver package page](https://source.sierrawireless.com/resources/airprime/software/usb-drivers-linux-qmi-software-latest/) on the Sierra Wireless website.
+
+# Build Instructions
+
+- Extract driver tarball to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.62`:
+```
+sudo mkdir -p /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
+sudo tar -C /usr/src/SierraLinuxQMIdrivers-S2.42N2.62 -xvf SierraLinuxQMIdriversS2.42N2.62.tar.bz2
+```
+
+- Copy dkms.conf to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.62`:
+```
+sudo cp /usr/src/SierraLinuxQMIdrivers-S2.42N2.62/dkms/dkms.conf /usr/src/SierraLinuxQMIdrivers-S2.42N2.62/
+```
+
+- Add the modules to the DKMS tree:
+```
+sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+```
+
+- Build the modules using DKMS:
+```
+sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+```
+
+- Install the modules using DKMS:
+```
+sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+```
+
+- Check status:
+```
+sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+```
+
+- Uninstall and remove source using DKMS:
+```
+sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62 --all
+sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
+```
+
+## Notes
+
+- **IMPORTANT** The Sierra build installs the modules into /lib/modules/$(uname -r)/kernel/drivers/net/usb /lib/modules/$(uname -r)/kernel/drivers/usb/serial/, but dkms ignores the corresponding DEST_MODULE_LOCATION in the dkms.conf for Ubuntu, as per design, putting the modules into /lib/modules/$(uname -r)/updates/dkms instead

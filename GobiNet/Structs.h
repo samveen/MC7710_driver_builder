@@ -663,6 +663,9 @@ typedef struct sGobiUSBNet
 #define CLIENT_MEMORY_LOCK 1
 #define CLIENT_MEMORY_UNLOCK 0
    atomic_t aClientMemIsLock;
+   #ifdef CONFIG_PM
+   bool bPrintResmeFromUserSpace;
+   #endif
 } sGobiUSBNet;
 
 /*=========================================================================*/

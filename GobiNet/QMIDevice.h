@@ -136,9 +136,14 @@ POSSIBILITY OF SUCH DAMAGE.
 #define SEMI_INIT_DEFAULT_VALUE 0
 #define QMI_CONTROL_MSG_DELAY_MS 100
 #define QMI_CONTROL_MAX_MSG_DELAY_MS QMI_CONTROL_MSG_DELAY_MS * 5
+#define QMI_CONTROL_MAX_RESUME_MSG_DELAY_MS QMI_CONTROL_MSG_DELAY_MS * 20
+
 // QMI CTL
 #define QMI_CTL_IND 0x02
 #define QMI_CTL_SYNC_IND 0x0027
+
+// Set Power Save Mode
+#define QMI_CTL_PWR_CONF_RSP 0x002A
 
 extern int qcqmi_table[MAX_QCQMI];
 extern int qmux_table[MAX_QCQMI];
@@ -171,6 +176,41 @@ extern int qmux_table[MAX_QCQMI];
       printk(KERN_ERR "Invalid entry:(%d) at qcqmi_table\n",i);\
    }\
 })
+
+#define gobi_nop(ms)({\
+   unsigned long onesec = 0;\
+   onesec = jiffies + msecs_to_jiffies(ms);\
+   printk(KERN_INFO "gobi_nop start\n");\
+   while(jiffies<onesec)\
+   {\
+      msleep(100);\
+   }\
+   printk(KERN_INFO "gobi_nop end\n");\
+})
+   
+#define IsPIDVID(pDev,PID,VID)({\
+   bool bValue=false;\
+   if( (le16_to_cpu(pDev->udev->descriptor.idVendor==VID)) && \
+          (le16_to_cpu(pDev->udev->descriptor.idProduct==PID)) )\
+   {\
+      bValue=true;\
+   }\
+   bValue;\
+})
+
+#define Is9x50Device(pDev)({\
+   IsPIDVID(pDev,0x9091,0x1199)|\
+   IsPIDVID(pDev,0x90B1,0x1199)|\
+   IsPIDVID(pDev,0x90C1,0x1199);\
+})
+
+#define IsSendToCurrIntf(pDev)({\
+   IsPIDVID(pDev,0x9081,0x1199)|\
+   IsPIDVID(pDev,0x68c0,0x1199)|\
+   IsPIDVID(pDev,0x9071,0x1199)|\
+   Is9x50Device(pDev);\
+})
+
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION( 5,0,0 ))
    #define gobi_dev_change_flags(dev,flags) dev_change_flags(dev, flags, NULL)
@@ -613,7 +653,7 @@ void ClearUsbNetTxStatics(struct usbnet *pDev);
 void ClearParentTxStatics(struct net_device *net);
 
 #ifdef CONFIG_ANDROID
-#define  DELAY_MS_DEFAULT  round_jiffies_relative(30*HZ)
+#define  DELAY_MS_DEFAULT  round_jiffies_relative(0*HZ)
 //
 void SetTxRxStat(sGobiUSBNet *pGobiDev,int state);
 //
@@ -629,3 +669,13 @@ void gobiPmRelax(sGobiUSBNet *pGobiDev);
 //
 int GenerateProcessName(const char *pPrefix,char *szProcessName,unsigned sizeofName,sGobiUSBNet *pGobiDev );
 #endif
+
+//
+void SetCurrentSuspendStat(sGobiUSBNet *pGobiDev,bool bSuspend);
+//
+int ResetReadEndpoints( sGobiUSBNet * pDev );
+//
+int ResetRcvReadEndpoints( sGobiUSBNet * pDev );
+//
+int ResetCtrlReadEndpoints( sGobiUSBNet * pDev );
+

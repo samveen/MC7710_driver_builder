@@ -132,7 +132,9 @@ POSSIBILITY OF SUCH DAMAGE.
 #include <linux/inetdevice.h>
 #include <linux/net.h>
 #include <linux/route.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION( 4,2,0 ))
 #include <linux/syscalls.h>
+#endif
 #include <linux/ipv6.h>
 #include <linux/ipv6_route.h>
 #include <net/ip_fib.h>
@@ -247,6 +249,13 @@ ADD_ROUTE_TABLE(xNet,fib_default,RT_TABLE_DEFAULT);
       }\
    }\
 })
+
+#define PRINT_RESUME_FROM_SUSPEND(pGobiDev)\
+if(pGobiDev->bPrintResmeFromUserSpace)\
+{\
+   DBG("RESUME FROM SUSPEND\n");\
+   pGobiDev->bPrintResmeFromUserSpace = false;\
+}
 
 /* initially all zero */
 int qcqmi_table[MAX_QCQMI];
@@ -1270,6 +1279,21 @@ void ReadCallback( struct urb * pReadURB )
             }
          }
       }
+      if(u16MsgID==QMI_CTL_PWR_CONF_RSP)
+      {
+         DBG("PWR u8Type:0x%02x, TID:0x%02x ,MSGID:0x%02x\n",
+                u8Type, transactionID,u16MsgID);
+         DBG("Clear Save Power\n");
+         #ifdef CONFIG_PM
+         SetCurrentSuspendStat(pDev,0);
+         #endif
+         #ifdef CONFIG_ANDROID
+         SetCurrentSuspendStat(pDev,0);
+         // It doesn't matter if this is autoresume or system resume
+         SetTxRxStat(pDev,RESUME_RX_OKAY);
+         SetTxRxStat(pDev,RESUME_TX_OKAY);
+         #endif
+      }
    }
    if (result < 0)
    {
@@ -1808,15 +1832,7 @@ int StartRead( sGobiUSBNet * pDev )
       return -ENXIO;
    }
    mb();
-   usb_reset_endpoint(pDev->mpNetDev->udev,0);
-   usb_reset_endpoint(pDev->mpNetDev->udev,
-      pendp->bEndpointAddress);
 
-   usb_clear_halt(pDev->mpNetDev->udev,
-      usb_rcvctrlpipe( pDev->mpNetDev->udev, 0 ));
-   usb_clear_halt(pDev->mpNetDev->udev,
-      usb_rcvintpipe( pDev->mpNetDev->udev,
-         pendp->bEndpointAddress));
    return usb_submit_urb( pDev->mQMIDev.mpIntURB, GOBI_GFP_ATOMIC );
 }
 
@@ -3620,7 +3636,7 @@ long UserspaceunlockedIOCTL(
    #ifdef CONFIG_PM
    if(bIsSuspend(pFilpData->mpDev))
    {
-      DBG("RESUME FROM SUSPEND\n");
+      PRINT_RESUME_FROM_SUSPEND(pFilpData->mpDev);
       gobi_usb_autopm_get_interface_async( pFilpData->mpDev->mpIntf );
       gobi_usb_autopm_put_interface_async( pFilpData->mpDev->mpIntf );
       return -EINTR;
@@ -4675,7 +4691,7 @@ ssize_t UserspaceRead(
    #ifdef CONFIG_PM
    if(bIsSuspend(pFilpData->mpDev))
    {
-      DBG("RESUME FROM SUSPEND\n");
+      PRINT_RESUME_FROM_SUSPEND(pFilpData->mpDev);
       gobi_usb_autopm_get_interface_async( pFilpData->mpDev->mpIntf );
       gobi_usb_autopm_put_interface_async( pFilpData->mpDev->mpIntf );
       return -EINTR;
@@ -4860,7 +4876,7 @@ ssize_t UserspaceWrite(
    #ifdef CONFIG_PM
    if(bIsSuspend(pFilpData->mpDev))
    {
-      DBG("RESUME FROM SUSPEND\n");
+      PRINT_RESUME_FROM_SUSPEND(pFilpData->mpDev);
       gobi_usb_autopm_get_interface_async( pFilpData->mpDev->mpIntf );
       gobi_usb_autopm_put_interface_async( pFilpData->mpDev->mpIntf );
       return -EINTR;
@@ -4961,7 +4977,7 @@ unsigned int UserspacePoll(
    #ifdef CONFIG_PM
    if(bIsSuspend(pFilpData->mpDev))
    {
-      DBG("RESUME FROM SUSPEND\n");
+      PRINT_RESUME_FROM_SUSPEND(pFilpData->mpDev);
       gobi_usb_autopm_get_interface_async( pFilpData->mpDev->mpIntf );
       gobi_usb_autopm_put_interface_async( pFilpData->mpDev->mpIntf );
       return -EINTR;
@@ -5429,6 +5445,14 @@ qmi_open(struct inode *inode, struct file *file)
     return single_open(file, qmi_show, data);
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION( 5,6,0 ))
+static const struct proc_ops proc_fops = {
+   .proc_open       = qmi_open,
+   .proc_read       = seq_read,
+   .proc_lseek      = seq_lseek,
+   .proc_release    = single_release,
+};
+#else
 static const struct file_operations proc_fops = {
     .owner      = THIS_MODULE,
     .open       = qmi_open,
@@ -5436,6 +5460,7 @@ static const struct file_operations proc_fops = {
     .llseek     = seq_lseek,
     .release    = single_release,
 };
+#endif
 
 /*===========================================================================
 METHOD:
@@ -5505,6 +5530,8 @@ int RegisterQMIDevice( sGobiUSBNet * pDev, int is9x15 )
       }
    }while(result!=0);
    atomic_set( &pDev->mQMIDev.mQMICTLTransactionID, 1 );
+
+   ResetReadEndpoints(pDev);
 
    // Start Async reading
    result = StartRead( pDev );
@@ -8130,7 +8157,7 @@ int SetPowerSaveMode(sGobiUSBNet *pDev,u8 mode)
         DBG( "bad write data %d\n", result );
         return result;
    }
-   wait_control_msg_semaphore_timeout(&readSem, QMI_CONTROL_MAX_MSG_DELAY_MS);
+   wait_control_msg_semaphore_timeout(&readSem, QMI_CONTROL_MAX_RESUME_MSG_DELAY_MS);
    mb();
    // Enter critical section
    flags = LocalClientMemLockSpinLockIRQSave( pDev , __LINE__);
@@ -9942,11 +9969,21 @@ RETURN VALUE:
 ===========================================================================*/
 void gobiUnLockSystemSleep(sGobiUSBNet *pGobiDev)
 {
+extern int wakelock_timeout;
+   unsigned long delay = DELAY_MS_DEFAULT;
    WLDEBUG( "gobiUnLockSystemSleep\n");
    GobiCancelUnLockSystemSleepWorkQueue(pGobiDev);
    INIT_DELAYED_WORK(&pGobiDev->dwUnLockSystemSleep,
             ProcessUnLockSystemSleepFunction);
-   queue_delayed_work(pGobiDev->wqUnLockSystemSleep, &pGobiDev->dwUnLockSystemSleep, DELAY_MS_DEFAULT);
+   if(wakelock_timeout<0)
+   {
+      delay = DELAY_MS_DEFAULT;
+   }
+   else
+   {
+      delay = round_jiffies_relative(wakelock_timeout*HZ);
+   }
+   queue_delayed_work(pGobiDev->wqUnLockSystemSleep, &pGobiDev->dwUnLockSystemSleep, delay);
 }
 #endif
 
@@ -12335,5 +12372,91 @@ void gobiProcessNetDev(sGobiUSBNet *pGobiDev)
    INIT_DELAYED_WORK(&pGobiDev->dwNetDev,
             NetDevCallback);
    queue_delayed_work(pGobiDev->wqNetDev, &pGobiDev->dwNetDev, 0);
+}
+
+/*===========================================================================
+ResetReadEndpoints
+
+   ResetReadEndpoints (Private Method)
+
+DESCRIPTION:
+   Do ResetCtrlReadEndpoints and ResetRcvReadEndpoints.
+
+PARAMETERS:
+   pGobiDev                 [ I ] - Pointer to sGobiUSBNet pointer
+RETURN VALUE:
+   0 - Success.
+   negative - When error occour.
+===========================================================================*/
+
+int ResetReadEndpoints( sGobiUSBNet * pDev )
+{
+   int iRet = 0;
+   iRet = ResetCtrlReadEndpoints(pDev);
+   if(iRet == 0)
+   {
+      iRet = ResetRcvReadEndpoints(pDev);
+   }
+   return iRet;
+}
+
+/*===========================================================================
+ResetReadEndpoints
+
+   ResetCtrlReadEndpoints (Private Method)
+
+DESCRIPTION:
+   Reset control read enpoint.
+
+PARAMETERS:
+   pGobiDev                 [ I ] - Pointer to sGobiUSBNet pointer
+RETURN VALUE:
+   0 - Success.
+   negative - When error occour.
+===========================================================================*/
+
+int ResetCtrlReadEndpoints( sGobiUSBNet * pDev )
+{
+   struct usb_endpoint_descriptor *pendp;
+   pendp = GetEndpoint(pDev->mpIntf, USB_ENDPOINT_XFER_INT, USB_DIR_IN);
+   if(pendp!=NULL)
+   {
+      usb_reset_endpoint(pDev->mpNetDev->udev,0);
+      usb_clear_halt(pDev->mpNetDev->udev,
+         usb_rcvctrlpipe( pDev->mpNetDev->udev, 0 ));
+      return 0;
+   }
+   return -ENOMEM;
+}
+
+/*===========================================================================
+ResetRcvReadEndpoints
+
+   ResetRcvReadEndpoints (Private Method)
+
+DESCRIPTION:
+   Reset receive interrupt enpoint.
+
+PARAMETERS:
+   pGobiDev                 [ I ] - Pointer to sGobiUSBNet pointer
+RETURN VALUE:
+   0 - Success.
+   negative - When error occour.
+===========================================================================*/
+
+int ResetRcvReadEndpoints( sGobiUSBNet * pDev )
+{
+   struct usb_endpoint_descriptor *pendp;
+   pendp = GetEndpoint(pDev->mpIntf, USB_ENDPOINT_XFER_INT, USB_DIR_IN);
+   if(pendp!=NULL)
+   {
+      usb_reset_endpoint(pDev->mpNetDev->udev,
+         pendp->bEndpointAddress);
+      usb_clear_halt(pDev->mpNetDev->udev,
+         usb_rcvintpipe( pDev->mpNetDev->udev,
+         pendp->bEndpointAddress));
+      return 0;
+   }
+   return -ENOMEM;
 }
 

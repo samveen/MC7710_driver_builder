@@ -134,7 +134,7 @@ static inline __u8 ipv6_tclass2(const struct ipv6hdr *iph)
 //-----------------------------------------------------------------------------
 
 // Version Information
-#define DRIVER_VERSION "2020-03-04/SWI_2.61"
+#define DRIVER_VERSION "2020-04-24/SWI_2.62"
 #define DRIVER_AUTHOR "Qualcomm Innovation Center"
 #define DRIVER_DESC "GobiNet"
 #define QOS_HDR_LEN (6)
@@ -154,8 +154,10 @@ int qos_debug;
 int iModuleExit=0;
 #ifdef CONFIG_ANDROID
 int wakelock_debug=0;
+int wakelock_timeout=-1;
 #endif
 
+int resume_delay_ms = 1000;
 /*
  * enable/disable TE flow control
  */
@@ -563,6 +565,10 @@ void SetCurrentSuspendStat(sGobiUSBNet *pGobiDev,bool bSuspend)
 {
    unsigned long flags = 0;
    spin_lock_irqsave(&pGobiDev->sSuspendLock,flags);
+   if(!bSuspend)
+   {
+      pGobiDev->bPrintResmeFromUserSpace = true;
+   }
    pGobiDev->bSuspend = bSuspend;
    #ifdef CONFIG_ANDROID
    pGobiDev->iSuspendReadWrite = RESUME_TX_RX_DISABLE;
@@ -658,8 +664,9 @@ int GobiNetSuspend(
    {
       DBG( "Set Power Save Mode 1\n" );
    }
-
+   #ifdef CONFIG_PM
    SetCurrentSuspendStat(pGobiDev,1);
+   #endif
 
    KillRead(pGobiDev);
    
@@ -725,6 +732,24 @@ int GobiNetSuspend(
       {
           DBG("[line:%d] send usb_control_msg failed!nRet = %d\n", __LINE__, nRet);
       }
+
+      if(IsSendToCurrIntf(pDev))
+      {
+         DBG("Set USB_DEVICE_REMOTE_WAKEUP %d\n",
+            pIntf->cur_altsetting->desc.bInterfaceNumber);
+         // Set REMOTE WAKUP FEATURE in current interface
+         nRet = Gobi_usb_control_msg(pIntf,pDev->udev, usb_sndctrlpipe(pDev->udev, 0),
+         USB_REQ_SET_FEATURE, USB_RECIP_DEVICE,
+         USB_DEVICE_REMOTE_WAKEUP,
+         pIntf->cur_altsetting->desc.bInterfaceNumber, //specific interface number
+         NULL,
+         0,
+         USB_CTRL_SET_TIMEOUT);
+         if (nRet != 0)
+         {
+            DBG("[line:%d] send usb_control_msg failed!nRet = %d\n", __LINE__, nRet);
+         }
+      }
    }
    // Run usbnet's suspend function so that the kernel spin lock counter keeps balance
    return usbnet_suspend( pIntf, powerEvent );
@@ -783,6 +808,14 @@ int GobiNetResume( struct usb_interface * pIntf )
       return -ENXIO;
    }
 
+   if(!Is9x50Device(pDev))
+   {
+       //Require a 1 second delay before resuming device
+       if(resume_delay_ms>0)
+       {
+          gobi_nop(resume_delay_ms);
+       }
+   }
    #ifdef CONFIG_ANDROID
    gobiLockSystemSleep(pGobiDev);
    gobiUnLockSystemSleep(pGobiDev);
@@ -803,7 +836,6 @@ int GobiNetResume( struct usb_interface * pIntf )
    #else
    SendWakeupControlMsg(pIntf,oldPowerState);
    GobiClearDownReason( pGobiDev, DRIVER_SUSPENDED );
-   SetCurrentSuspendStat(pGobiDev,0);
    #endif
 
    /* Run usbnet's resume function so that the kernel spin lock counter keeps balance */
@@ -816,7 +848,7 @@ int GobiNetResume( struct usb_interface * pIntf )
       DBG("[line:%d] usbnet_resume failed!nRet = %d\n", __LINE__, nRet);
       #endif
    }
-   SetCurrentSuspendStat(pGobiDev,0);
+
    if(pGobiDev->mbUnload < eStatUnloading)
    {
       StartRead(pGobiDev);
@@ -839,6 +871,7 @@ int GobiNetResume( struct usb_interface * pIntf )
          #else
          DBG( "Set Power Save Mode 0\n" );
          #endif
+         SetCurrentSuspendStat(pGobiDev,0);
       }
    }
    #ifdef CONFIG_ANDROID
@@ -2764,6 +2797,11 @@ static const struct usb_device_id GobiVIDPIDTable [] =
    //AR758x
    {QMI_9X15_DEVICE(0x1199, 0x9102)},
 
+   //RC51xx
+   {QMI_9X15_DEVICE(0x1199, 0x9081)},
+
+   //Add new PID/VID to IsSendToCurrIntf
+
    //Terminating entry
    { }
 };
@@ -3475,6 +3513,23 @@ void SendWakeupControlMsg(
       {
           DBG("[line:%d] send usb_control_msg failed!nRet = %d\n", __LINE__, nRet);
       }
+      if(IsSendToCurrIntf(pDev))
+      {
+          DBG("CLEAR USB_DEVICE_REMOTE_WAKEUP %d\n",pIntf->cur_altsetting->desc.bInterfaceNumber);
+          // Clear REMOTE WAKUP FEATURE in current interface
+           nRet = Gobi_usb_control_msg(pIntf,pDev->udev, usb_sndctrlpipe(pDev->udev, 0),
+                                             USB_REQ_CLEAR_FEATURE,
+                                                     USB_RECIP_DEVICE,
+                                             USB_DEVICE_REMOTE_WAKEUP, 
+                                             pIntf->cur_altsetting->desc.bInterfaceNumber,//interface number
+                                             NULL, 
+                                             0,
+                                             USB_CTRL_SET_TIMEOUT);
+          if (nRet != 0)
+          {
+              DBG("[line:%d] send usb_control_msg failed!nRet = %d\n", __LINE__, nRet);
+          }
+      }
    }
    // 9x30(EM74xx) needs this when resume
    nRet = Gobi_usb_control_msg(pIntf, pDev->udev,
@@ -3968,4 +4023,13 @@ MODULE_PARM_DESC( wakelock_debug, "Wake lock debug enabled or not" );
 
 module_param( iAutoIPAddress, int, S_IRUGO | S_IWUSR );
 MODULE_PARM_DESC( iAutoIPAddress, "0(default) = Manual assgin IP address to adaptor : Zeros , 1  = Get IP address via QMI" );
+
+#ifdef CONFIG_ANDROID
+module_param( wakelock_timeout, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( wakelock_timeout, "-1 : 0 seconds, Number of second wakelock will be released after resume" );
+#endif
+
+module_param( resume_delay_ms, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( resume_delay_ms, "1000(default) : Delay before resume in millisecond" );
+
 

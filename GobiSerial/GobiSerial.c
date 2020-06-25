@@ -90,7 +90,7 @@ POSSIBILITY OF SUCH DAMAGE.
 //---------------------------------------------------------------------------
 
 // Version Information
-#define DRIVER_VERSION "2020-03-04/SWI_2.41"
+#define DRIVER_VERSION "2020-04-24/SWI_2.42"
 #define DRIVER_AUTHOR "Qualcomm Innovation Center"
 #define DRIVER_DESC "GobiSerial"
 
@@ -327,6 +327,18 @@ static struct usb_device_id GobiVIDPIDTable[] =
    { USB_DEVICE(0x1199, 0x90c1),
       /* blacklist the interface */
       .driver_info = BIT(1) | BIT(5) | BIT(6) | BIT(8) | BIT(10) | BIT(11) | BIT(12) | BIT(13)
+   },
+
+   /* Sierra Wireless QMI RC51xx APP*/
+   { USB_DEVICE(0x1199, 0x9081),
+    /* blacklist the interface */
+      .driver_info = BIT(1) | BIT(4) | BIT(5) | BIT(6) | BIT(8) | BIT(10) | BIT(11) | BIT(12) | BIT(13)
+   },
+
+   /* Sierra Wireless QMI RC51xx BOOT*/
+   { USB_DEVICE(0x1199, 0x9080),
+      /* blacklist the interface */
+      .driver_info = BIT(1) | BIT(4) | BIT(5) | BIT(6) | BIT(8) | BIT(10) | BIT(11) | BIT(12) | BIT(13)
    },
 
    {G3K_DEVICE(0x1199, 0x9010)},
