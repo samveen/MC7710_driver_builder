@@ -457,6 +457,54 @@ enum{
 #define RESUME_RX_OKAY 0x01
 #define RESUME_TX_OKAY 0x02
 #endif
+
+#define RUNTIME_SETTING_IPV4_TLV_SIZE 4
+#define RUNTIME_SETTING_IPV6_TLV_SIZE 17
+
+#define IPV6_ADDR_SIZE_OF_U8_LENGTH  IPV6_ADDR_LEN
+#define off_str(x,y) (#x + y)
+//skip eRUNTIME_SETTING_
+#define eRTstr(x) off_str(x,17)
+
+enum 
+{
+   eRUNTIME_SETTING_IPv4ADDR=0,
+   eRUNTIME_SETTING_IPv4ADDR_TLV=0x1E,
+   eRUNTIME_SETTING_IPv4GW=1,
+   eRUNTIME_SETTING_IPv4GW_TLV=0x20,
+   eRUNTIME_SETTING_IPv4NetMask=2,
+   eRUNTIME_SETTING_IPv4NetMask_TLV=0x21,
+    eRUNTIME_SETTING_IPv4DNS1=3,
+   eRUNTIME_SETTING_IPv4DNS1_TLV=0x15,
+   eRUNTIME_SETTING_IPv4DNS2=4,
+   eRUNTIME_SETTING_IPv4DNS2_TLV=0x16,
+   eRUNTIME_SETTING_IPv4MAX=5,
+};
+
+enum
+{
+   eRUNTIME_SETTING_IPv6ADDR=0,
+   eRUNTIME_SETTING_IPv6ADDR_TLV=0x25,
+   eRUNTIME_SETTING_IPv6GATEWAY=1,
+   eRUNTIME_SETTING_IPv6GATEWAY_TLV=0x26,
+   eRUNTIME_SETTING_IPv6MAX=2
+};
+
+typedef struct {
+   uint32_t IPInfo[eRUNTIME_SETTING_IPv4MAX];
+   uint8_t  u8IPAddr[eRUNTIME_SETTING_IPv6MAX][IPV6_ADDR_SIZE_OF_U8_LENGTH];
+   uint8_t  u8Prefix[eRUNTIME_SETTING_IPv6MAX];
+   u16 ClientID;
+   u8 type;
+   uint32_t mtu;
+}WDSNetData;
+
+enum{
+   eNetDev_WQ_STATE_Unknown=-1,
+   eNetDev_WQ_STATE_HANDLE_REQ,
+   eNetDev_WQ_STATE_HANDLE_RESP,
+};
+
 /*=========================================================================*/
 // Struct sGobiUSBNet
 //
@@ -565,6 +613,8 @@ typedef struct sGobiUSBNet
    struct sk_buff *pLastSKB;
    struct net_device *pNetDevice[MAX_MUX_NUMBER_SUPPORTED];
    sQMuxIPTable      qMuxIPTable[MAX_MUX_NUMBER_SUPPORTED];
+   sQMuxIPTable      qMuxAutoIP;
+
    u32 ULDatagramSize;
    u32 ULDatagram;
    int iIPAlias;
@@ -591,6 +641,17 @@ typedef struct sGobiUSBNet
    struct workqueue_struct *wqUnLockSystemSleep;
    struct delayed_work dwUnLockSystemSleep;
    #endif
+
+   /*
+    * Workqueue and Delaywork to Process NetDev.
+    */
+   struct workqueue_struct *wqNetDev;
+   struct delayed_work dwNetDev;
+   WDSNetData wdsNetResp;
+   WDSNetData wdsNetReq;
+   u8         wdsNetState;
+   u8         u8AutoIPEnable;
+
    struct urb *pReadURB;
    #ifdef CONFIG_ANDROID
    struct wakeup_source __rcu *ws;

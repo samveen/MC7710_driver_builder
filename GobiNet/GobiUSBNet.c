@@ -134,7 +134,7 @@ static inline __u8 ipv6_tclass2(const struct ipv6hdr *iph)
 //-----------------------------------------------------------------------------
 
 // Version Information
-#define DRIVER_VERSION "2019-11-22/SWI_2.60"
+#define DRIVER_VERSION "2020-03-04/SWI_2.61"
 #define DRIVER_AUTHOR "Qualcomm Innovation Center"
 #define DRIVER_DESC "GobiNet"
 #define QOS_HDR_LEN (6)
@@ -165,6 +165,9 @@ int iMaxQMUXSupported=-1;
 int iIPAlias=1;
 //Fill zero to ethernet header source address.
 int iEthSrcMACNonZero=0;
+
+// Get IP address infromation via QMI
+int iAutoIPAddress = 0;
 /*
  * Is RAW IP RAW
  */
@@ -910,6 +913,11 @@ u8 retrieveMuxID(struct sk_buff *skb, sGobiUSBNet *pGobiNet)
    unsigned int ipAddress = 0;
    ipv6_addr *pIPv6Addr = NULL;
    int i;
+   union
+   {
+      uint32_t obj;
+      uint8_t  bytes[4];
+   } IPv4s;
    
    switch (skb->data[0] & 0xf0) 
    {
@@ -917,7 +925,14 @@ u8 retrieveMuxID(struct sk_buff *skb, sGobiUSBNet *pGobiNet)
       {
          ipAddress = ntohl(((qmap_ipv4_header_t)(skb->data))->src_address);
          PrintIPAddr("Packet src IP address : ",  ipAddress);
-
+         IPv4s.obj = ntohl(ipAddress);
+         if( (pGobiNet->qMuxAutoIP.ipAddress==ipAddress) && 
+             (pGobiNet->u8AutoIPEnable) )
+         {
+            muxId = 0x00;
+            DBG("AUTO: %pI4",IPv4s.bytes);
+            break;
+         }
          for ( i = 0; i < MAX_MUX_NUMBER_SUPPORTED; i++ )
          {
             if ( ipAddress == pGobiNet->qMuxIPTable[i].ipAddress )
@@ -936,7 +951,7 @@ u8 retrieveMuxID(struct sk_buff *skb, sGobiUSBNet *pGobiNet)
          PrintIPV6Addr(pIPv6Addr);
          for ( i = 0; i < MAX_MUX_NUMBER_SUPPORTED; i++ )
          {
-            if (memcmp(pIPv6Addr, &pGobiNet->qMuxIPTable[i].ipV6Address.ipv6addr,IPV6_ADDR_LEN)==0 )
+            if (memcmp(pIPv6Addr->ipv6addr, &pGobiNet->qMuxIPTable[i].ipV6Address.ipv6addr,IPV6_ADDR_LEN)==0 )
             {
                muxId += pGobiNet->qMuxIPTable[i].instance;
                NETDBG("Mux ID found : 0x%02x\n",  muxId);
@@ -949,6 +964,21 @@ u8 retrieveMuxID(struct sk_buff *skb, sGobiUSBNet *pGobiNet)
                   NETDBG("%d.Mux ID Not Match\n",  i);
                   PrintIPV6Addr(&pGobiNet->qMuxIPTable[i].ipV6Address);
                }
+            }
+         }
+         if( (i==MAX_MUX_NUMBER_SUPPORTED) && 
+               (pGobiNet->u8AutoIPEnable) )
+         {
+            ipv6_addr zeroIPv6;
+            memset (&zeroIPv6, 0, sizeof(zeroIPv6));
+            if(memcmp(pGobiNet->qMuxAutoIP.ipV6Address.ipv6addr,pIPv6Addr->ipv6addr,IPV6_ADDR_LEN)==0)
+            {
+               muxId = 0x00;
+               NETDBG("Mux ID found : 0x%02x\n",  muxId);
+            }else if(memcmp(pGobiNet->qMuxAutoIP.ipV6Address.ipv6addr,zeroIPv6.ipv6addr,IPV6_ADDR_LEN)!=0)
+            {
+               muxId = 0x00;
+               NETDBG("Mux ID found : 0x%02x\n",  muxId);
             }
          }
          break;
@@ -1214,6 +1244,27 @@ struct sk_buff *GobiNetDriverTxFixup(
          DBG( "QMUX For sending to device");
          //PrintHex (pSKB->data, pSKB->len);
          return pSKB;
+      }
+      else
+      {
+         struct gobi_qmimux_hdr *hdr;
+         unsigned int len = 0;
+
+         skb_pull(pSKB, ETH_HLEN);
+         skb_reset_mac_header(pSKB);
+         skb_reset_network_header(pSKB);
+         skb_reset_transport_header(pSKB);
+         if((pGobiDev->u8AutoIPEnable)&&(pSKB->len > ETH_HLEN))
+         {
+            hdr = (struct gobi_qmimux_hdr *)skb_push(pSKB, sizeof(struct gobi_qmimux_hdr));
+            len = pSKB->len - sizeof(struct gobi_qmimux_hdr);
+            hdr->pad = 0;
+            hdr->mux_id = 0;
+            hdr->pkt_len = cpu_to_be16(len);
+            NETDBG( "QMUX ETH 0x%02x\n", 0);
+            NetHex (pSKB->data, pSKB->len);
+            return pSKB;
+         }
       }
    }
    else if(pGobiDev->iQMUXEnable!=0)
@@ -2505,6 +2556,10 @@ static int GobiNetDriverLteRxFixup(struct usbnet *dev, struct sk_buff *skb)
       GobiNetDriverRxFixup(dev,skb);
       //Consume this packet in driver(netif_rx), no need to forward back
       //via usbnet_skb_return after fixup
+      if(pGobiDev->iIPAlias==0)
+      {
+         ClearUsbNetTxStatics(dev);
+      }
       return 0;
    }
    else if(pGobiDev->iNetLinkStatus!=eNetDeviceLink_Connected)
@@ -3061,12 +3116,23 @@ int GobiUSBNetProbe(
    pGobiDev->iQMUXEnable = 0;
    pGobiDev->iStoppingNetDev = 0;
    pGobiDev->nRmnet = 0;
+   pGobiDev->wdsNetReq.type = 0xff;
+   pGobiDev->u8AutoIPEnable = 0;
+   if(iAutoIPAddress>0)
+   {
+      pGobiDev->u8AutoIPEnable = 1;
+      #if (LINUX_VERSION_CODE < KERNEL_VERSION( 4,8,0 ))
+      printk( KERN_INFO "fib_rule Not supported\n");
+      #endif
+   }
+   
    if(ifacenum==8)// only allow interface 8 to allow qmux
    {
       if ( (iQMAPEnable != 0) && ( iNumberOfMUXIDSupported > 1 ) )
       {
          int index=0;
          pGobiDev->iQMUXEnable = 1;
+         gobi_dev_deactivate(pDev->net);
          if (gobi_rtnl_trylock())
          {
             if (!netif_running(pDev->net)) 
@@ -3103,7 +3169,7 @@ int GobiUSBNetProbe(
             }
             else
             {
-               printk("running\n");
+               printk(KERN_ERR "net dev running\n");
             }
             rtnl_unlock();
          }
@@ -3426,6 +3492,14 @@ void SendWakeupControlMsg(
    
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION( 5,4,0 ))
+#define gobi_nf_reset(skb)\
+   nf_reset_ct(skb);\
+   skb_ext_del(skb, SKB_EXT_BRIDGE_NF)
+#else
+#define gobi_nf_reset(skb) nf_reset(skb)
+#endif
+
 int _dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 {
    skb_orphan(skb);
@@ -3447,7 +3521,9 @@ int _dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
    skb->protocol = eth_type_trans(skb, dev);
    skb->mark = 0;
    secpath_reset(skb);
-   nf_reset(skb);
+   
+   gobi_nf_reset(skb);
+
    if (!list_empty(&skb->dev->napi_list))
    {
       DBG("napi_list\n");
@@ -3483,7 +3559,7 @@ int gobi_dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
    nskb->dev = dev;
    secpath_reset(nskb);
    skb_dst_drop(nskb);
-   nf_reset(nskb);
+   gobi_nf_reset(nskb);
    nskb->ip_summed = CHECKSUM_NONE;
    nskb->dev = dev;
    #if (LINUX_VERSION_CODE >= KERNEL_VERSION( 2,6,36 ))
@@ -3616,6 +3692,7 @@ RETURN VALUE:
 ===========================================================================*/
 void gobi_dev_deactivate(struct net_device *dev)
 {
+   unsigned short oflags;
    if (dev->flags & IFF_UP)
    {
       DBG("gobi_dev_deactivate\n");
@@ -3635,6 +3712,14 @@ void gobi_dev_deactivate(struct net_device *dev)
       DBG("dev_deactivate\n");
       dev_deactivate(dev);
       #endif
+      oflags = dev->flags;
+      oflags &= ~(IFF_UP | IFF_RUNNING);
+      if (gobi_dev_change_flags(dev,
+         oflags ) < 0)
+      {
+          printk(KERN_ERR "deactivate change flag failed %s\n",
+          dev->name);
+      }
       netdev_state_change(dev);
       rtnl_unlock();
    }
@@ -3781,6 +3866,63 @@ int iIsRemoteWakeupSupport(struct usbnet *pDev)
    return 0;
 }
 
+/*===========================================================================
+METHOD:
+   ClearUsbNetTxStatics (Private Method)
+
+DESCRIPTION:
+   Clear Net device statistics.
+
+PARAMETERS
+   pDev          [ I ] - usbnet device pointer
+
+RETURN VALUE:
+   NIL
+===========================================================================*/
+void ClearUsbNetTxStatics(struct usbnet *pDev)
+{
+   if(pDev)
+   {
+      #if (LINUX_VERSION_CODE >= KERNEL_VERSION( 4,12,0 ))
+      struct pcpu_sw_netstats *stats64 = this_cpu_ptr(pDev->stats64);
+      u64_stats_update_begin(&stats64->syncp);
+      stats64->tx_packets = 0;
+      stats64->tx_bytes = 0;
+      u64_stats_update_end(&stats64->syncp);
+      #else
+      struct net_device_stats * pStats = &(pDev->net->stats);
+      pStats->tx_packets = 0;
+      pStats->tx_bytes = 0;
+      #endif
+   }
+}
+
+/*===========================================================================
+METHOD:
+   ClearParentTxStatics (Private Method)
+
+DESCRIPTION:
+   Clear Parent Net device statistics.
+
+PARAMETERS
+   pDev          [ I ] - net device pointer
+
+RETURN VALUE:
+   NIL
+===========================================================================*/
+void ClearParentTxStatics(struct net_device *net)
+{
+   struct usbnet *pDev = NULL;
+   if(net)
+   {
+      pDev = netdev_priv(net);
+      if(pDev)
+      {
+         ClearUsbNetTxStatics(pDev);
+      }
+   }
+}
+
 module_exit( GobiUSBNetModExit );
 
 MODULE_VERSION( DRIVER_VERSION );
@@ -3823,4 +3965,7 @@ MODULE_PARM_DESC( iEthSrcMACNonZero, "0(default) = Ethernet Header Source Addres
 module_param( wakelock_debug, int, S_IRUGO | S_IWUSR );
 MODULE_PARM_DESC( wakelock_debug, "Wake lock debug enabled or not" );
 #endif
+
+module_param( iAutoIPAddress, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( iAutoIPAddress, "0(default) = Manual assgin IP address to adaptor : Zeros , 1  = Get IP address via QMI" );
 

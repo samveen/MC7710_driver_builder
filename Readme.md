@@ -7,6 +7,12 @@ QMI USB Drivers for the Sierra AirPrime series.
 This is the preliminary framework I wrote up to atleast automate the process of 
 building and installing the modules. Future TODO is to do Full DKMS-ization of the build.
 
+# Before Anything Else
+
+The Sierra sources require the kernel include file `linux/memcontrol.h` to be edited in
+different ways depending on the kernel version the module is being built against. This
+framework edits the code expecting that the kernel version being used is `5.0.0` or greater.
+
 # Licensing
 
 - All driver code is copyright of their respective owners under their licensing
@@ -24,32 +30,32 @@ building and installing the modules. Future TODO is to do Full DKMS-ization of t
 
 # Build Instructions
 
-- Clone this repo into `/usr/src/SierraLinuxQMIdrivers-S2.39N2.60`:
+- Clone this repo into `/usr/src/SierraLinuxQMIdrivers-S2.41N2.61`:
 ```
-sudo git clone https://github.com/samveen/MC7710_driver_builder /usr/src/SierraLinuxQMIdrivers-S2.39N2.60
+sudo git clone https://github.com/samveen/MC7710_driver_builder /usr/src/SierraLinuxQMIdrivers-S2.41N2.61
 ```
 
 - Register the module with DKMS:
 ```
-sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60
+sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61
 ```
 
 - Build and install the module:
 ```
-sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60
-sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60
+sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61
+sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61
 ```
 
 - Check status:
 ```
-sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60
+sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61
 ```
 
 - Get rid of the DKMS setup in case it's a pain:
 ```
-sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60
-sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.39N2.60 --all
-sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.39N2.60
+sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61
+sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.41N2.61 --all
+sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.41N2.61
 ```
 
 ## TODO
@@ -57,9 +63,9 @@ sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.39N2.60
 
 ## Notes
 
-- The driver version in this repo is `S2.39N2.60` (latest as of February 03, 2020).
+- The driver version in this repo is `S2.41N2.61`.
 - List of versions of the Linux QMI USB drivers is available
   [here](https://source.sierrawireless.com/resources/airprime/software/usb-drivers-linux-qmi-software-history/).
 - My Makefile improvements [submitted to Sierra](https://forum.sierrawireless.com/t/patches-to-sierra-linux-qmi-drivers-version-s2-37n2-57/16899/3)) are now included.
 - I've had to [submit a second patch to Sierra](https://forum.sierrawireless.com/t/patches-to-sierra-linux-qmi-drivers-version-s2-39n2-60/19221) for a similar problem as previously.
-- **IMPORTANT** The Sierra build installs the modules into `/lib/modules/$(uname -r)/kernel/drivers/net/usb`, but `dkms` ignores  the corresponding `DEST_MODULE_LOCATION` in the `dkms.conf` for Ubuntu, as per design, putting the modules into `/lib/modules/$(uname -r)/updates/dkms` instead . More details at the [Ubuntu dkms manpage](http://manpages.ubuntu.com/manpages/bionic/man8/dkms.8.html#dkms.conf)
+- **IMPORTANT** The Sierra build installs the modules into `/lib/modules/${kversion}/kernel/drivers/net/usb`, but `dkms` ignores  the corresponding `DEST_MODULE_LOCATION` in the `dkms.conf` for Ubuntu, as per design, putting the modules into `/lib/modules/${kversion}/updates/dkms` instead . More details at the [Ubuntu dkms manpage](http://manpages.ubuntu.com/manpages/bionic/man8/dkms.8.html#dkms.conf)

@@ -190,6 +190,9 @@ if(wakelock_debug == 1)\
 #define QMI_WDS_GET_PKT_SRVC_STATUS_IND 0x22
 #define QMI_UIM_SIM_STATUS_CHANGED_IND  0x32
 
+#define QMI_WDS_GET_RUNTIMET_SETTINGS_MSGID 0x002d
+#define QMI_WDS_SET_IP_FAMILY_MSGID 0x004d
+
 #define u8        unsigned char
 #define u16       unsigned short
 #define u32       unsigned int
@@ -352,6 +355,12 @@ u16 QMICTLSyncReqSize( void );
 // Get size of buffer needed for QMUX + QMICTLGetVersionInfo
 u16 QMICTLGetVersionInfoReqSize( void );
 
+// Get size of buffer needed for QMUX + QMIWDSGetRuntimeSettingsReq
+u16 QMIWDSGetRuntimeSettingsReqSize( void );
+
+// Get size of buffer needed for QMUX + QMIWDSSetIPFamilyReq
+u16 QMIWDSSetIPFamilyReqSize( void );
+
 /*=========================================================================*/
 // Fill Buffers with QMI requests
 /*=========================================================================*/
@@ -428,6 +437,18 @@ int QMICTLGetVersionInfoReq(
    u16  buffSize,
    u16  transactionID );
 
+// Fill buffer with QMI WDS Get Runtime Settings Request
+int QMIWDSGetRuntimeSettingsReq(
+   void *   pBuffer,
+   u16      buffSize,
+   u16      transactionID );
+
+// Fill buffer with QMI WDS Set IP Family Request
+int QMIWDSSetIPFamilyReq(
+   void *   pBuffer,
+   u16      buffSize,
+   u16      transactionID,
+   u8       u8Value);
 /*=========================================================================*/
 // Parse data from QMI responses
 /*=========================================================================*/
@@ -496,6 +517,20 @@ int QMICTLGetVersionInfoResp(
    u16   buffSize,
    u8 *  pSvcVersion,
    int   versionInfoSize );
+
+// Parse the QMI WDS Get runtime settings Response
+int QMIWDSRuntimeResp(
+      sGobiUSBNet *pDev,
+      void *   pBuffer,
+      u16      buffSize,
+      u16      ClientID
+);
+
+// Parse the QMI WDS Set IP Family Response
+int QMIWDSSetIPFamilyResp(
+    sGobiUSBNet *pDev,
+      void *   pBuffer,
+      u16      buffSize);
 
 // Get size of buffer needed for QMUX + QMICTLSetPowerSaveModeReq
 u16  QMICTLSetPowerSaveModeReqSize( void );

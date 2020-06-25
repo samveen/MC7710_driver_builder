@@ -172,6 +172,12 @@ extern int qmux_table[MAX_QCQMI];
    }\
 })
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION( 5,0,0 ))
+   #define gobi_dev_change_flags(dev,flags) dev_change_flags(dev, flags, NULL)
+#else
+   #define gobi_dev_change_flags(dev,flags) dev_change_flags(dev, flags)
+#endif
+
 extern sGobiPrivateWorkQueues GobiPrivateWorkQueues[MAX_QCQMI][MAX_QCQMI_PER_INTF];
 //Register State
 enum {
@@ -580,6 +586,31 @@ int GobiInitWorkQueue(sGobiUSBNet *pGobiDev);
 void GobiDestoryWorkQueue(sGobiUSBNet *pGobiDev);
 // Clean up work queues in sGobiPrivateWorkQueues
 int iClearWorkQueuesByTableIndex(int index);
+
+//Add UP and RUNNING FLAGS to netdev.
+int gobi_activate_net(struct net_device *net);
+//Print reference WDS client ID.
+void PrintActiveWDSCID(sGobiUSBNet *pDev  ,u16 WDSClientID);
+//Cancel device NetDevCallback work queue.
+void GobiCancelwqNetDevWorkQueue(sGobiUSBNet *pGobiDev);
+//Add delayed work to wqNetDev.
+void gobiProcessNetDev(sGobiUSBNet *pGobiDev); 
+//Extract IPv4 Address Information to sGobiUSBNet.
+void GetIPv4Address(
+   sGobiUSBNet *pDev,
+   void *pBuffer,
+   u16 buffSize,
+   u16 ClientID);
+//Extract IPv6 Address Information to sGobiUSBNet.
+void GetIPv6Address(
+   sGobiUSBNet *pDev,
+   void *pBuffer,
+   u16 buffSize,
+   u16 ClientID);
+// Clear Net device statistics.
+void ClearUsbNetTxStatics(struct usbnet *pDev);
+// Clear Parent Net device statistics.
+void ClearParentTxStatics(struct net_device *net);
 
 #ifdef CONFIG_ANDROID
 #define  DELAY_MS_DEFAULT  round_jiffies_relative(30*HZ)
