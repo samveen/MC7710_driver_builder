@@ -30,9 +30,11 @@ examine dkms build logs carefully for any issues and errors.
 - Recent version of [DKMS](https://github.com/dell/dkms)
 - All the other requirements as listed on the [driver package page](https://source.sierrawireless.com/resources/airprime/software/usb-drivers-linux-qmi-software-s2,-d-,37n2,-d-,58/) on the Sierra Wireless website.
 
-# Last Tested Build Environment
+# Last Few Tested Build Environments
 
 - [Lenovo Thinkpad x230](https://www.lenovo.com/gb/en/laptops/thinkpad/x-series/x230/) running [Xubuntu "18.04.4 LTS (Bionic Beaver)"](https://xubuntu.org/download) with `dkms` version `2.3-3ubuntu9.7` and running linux kernel version 5.3.0 (version `5.3.0-59-generic`) to build Sierra Linux QMI Drivers version `S2.42N2.62` for package `linux-image-5.3.0-61-generic` (version `5.3.0-61.55~18.04.1`) on arch `amd64` via `updates` apt repo (`apt upgrade`).
+
+- [Lenovo Thinkpad x230](https://www.lenovo.com/gb/en/laptops/thinkpad/x-series/x230/) running [Xubuntu "20.04.1 LTS (Focal Fossa)"](https://xubuntu.org/download) with `dkms` version `2.8.1-5ubuntu1` and linux kernel version 5.4.0 via `updates` apt repo (package `linux-image-5.4.0-52-generic` version `5.4.0-52.57` for arch `amd64`) to build Sierra Linux QMI Drivers version `S2.42N2.63`.
 
 # Build Instructions
 
