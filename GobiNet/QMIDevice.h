@@ -145,6 +145,9 @@ POSSIBILITY OF SUCH DAMAGE.
 // Set Power Save Mode
 #define QMI_CTL_PWR_CONF_RSP 0x002A
 
+#define DEFAULT_SERVICE_AWAKE_TIMEOUT round_jiffies_relative(8*HZ)
+#define WDS_START_NET 0x0020
+
 extern int qcqmi_table[MAX_QCQMI];
 extern int qmux_table[MAX_QCQMI];
 
@@ -679,3 +682,9 @@ int ResetRcvReadEndpoints( sGobiUSBNet * pDev );
 //
 int ResetCtrlReadEndpoints( sGobiUSBNet * pDev );
 
+//Stay awake on selected service
+int StayAwakeOnService(void *pBuffer,sGobiUSBNet *pGobiDev);
+//
+void gobiSetPowerSaveMode(sGobiUSBNet *pGobiDev);
+//
+void GobiCancelSetPowerSaveModeWorkQueue(sGobiUSBNet *pGobiDev);

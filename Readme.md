@@ -4,7 +4,7 @@ I have an MC7710 running on an x230. Whenever apt upgrades the kernel, I have to
 rebuild the bloody driver manually, as there isn't a [DKMS](https://github.com/dell-oss/dkms) module for the Linux
 QMI USB Drivers for the Sierra AirPrime series.
 
-This is the preliminary framework I wrote up to atleast automate the process of 
+This is the preliminary framework I wrote up to atleast automate the process of
 building and installing the modules. Future TODO is to do Full DKMS-ization of the build.
 
 # Before Anything Else
@@ -36,33 +36,54 @@ examine dkms build logs carefully for any issues and errors.
 
 # Build Instructions
 
-- Clone this repo into `/usr/src/SierraLinuxQMIdrivers-S2.42N2.62`:
-```
-sudo git clone https://github.com/samveen/MC7710_driver_builder /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
-```
+
+- *(First time install only)* Clone this repo into `/usr/src/SierraLinuxQMIdrivers`:
+  ```
+  sudo git clone https://github.com/samveen/MC7710_driver_builder /usr/src/SierraLinuxQMIdrivers
+  ```
+
+- Create a link to the source dir with a version number(easier versioned driver updates):
+  ```
+  sudo ln -s /usr/src/SierraLinuxQMIdrivers SierraLinuxQMIdrivers-S2.42N2.63
+  ```
 
 - Register the module with DKMS:
-```
-sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-```
+  ```
+  sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+  ```
 
 - Build and install the module:
-```
-sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-```
+  ```
+  sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+  sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+  ```
 
 - Check status:
-```
-sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-```
+  ```
+  sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+  ```
 
 - Get rid of the DKMS setup in case it's a pain:
-```
-sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62 --all
-sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
-```
+  ```
+  sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+  sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63 --all
+  sudo rm -fR /usr/src/SierraLinuxQMIdrivers\*
+  ```
+
+- Update older versions of modules(remixes install and cleanup instructions above):
+  ```
+  # Remove old versions of drivers from all kernels
+  sudo dkms remove SierraLinuxQMIdrivers/S2.42N2.62 --all
+  # Update source
+  cd /usr/src/SierraLinuxQMIdrivers && sudo git pull & cd ..
+  # Move old driver version link to correct version number
+  sudo mv SierraLinuxQMIdrivers-S2.42N2.62 SierraLinuxQMIdrivers-S2.42N2.63
+  # Alternative syntax for dkms commands
+  sudo dkms add --verbose SierraLinuxQMIdrivers/S2.42N2.63
+  sudo dkms build SierraLinuxQMIdrivers/S2.42N2.63
+  sudo dkms install SierraLinuxQMIdrivers/S2.42N2.63
+  sudo dkms status --verbose SierraLinuxQMIdrivers/S2.42N2.63
+  ```
 
 ## TODO
 - Add kernel module signing for secure boot (Needs some research in Machine owner keys, via mokutil maybe).

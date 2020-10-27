@@ -134,7 +134,7 @@ static inline __u8 ipv6_tclass2(const struct ipv6hdr *iph)
 //-----------------------------------------------------------------------------
 
 // Version Information
-#define DRIVER_VERSION "2020-04-24/SWI_2.62"
+#define DRIVER_VERSION "2020-06-19/SWI_2.63"
 #define DRIVER_AUTHOR "Qualcomm Innovation Center"
 #define DRIVER_DESC "GobiNet"
 #define QOS_HDR_LEN (6)
@@ -155,6 +155,7 @@ int iModuleExit=0;
 #ifdef CONFIG_ANDROID
 int wakelock_debug=0;
 int wakelock_timeout=-1;
+int qmi_service_awake_timeout=-1;
 #endif
 
 int resume_delay_ms = 1000;
@@ -853,26 +854,7 @@ int GobiNetResume( struct usb_interface * pIntf )
    {
       StartRead(pGobiDev);
 
-      if(SetPowerSaveMode(pGobiDev,0)<0)
-      {
-         printk(KERN_ERR" Resume Set Power Save Mode 0 error 1\n");
-         //Disable data traffic now
-         #ifdef CONFIG_ANDROID
-         SetCurrentSuspendStat(pGobiDev,1);
-         GobiClearDownReason( pGobiDev, DRIVER_SUSPENDED );
-         netif_carrier_off( pGobiDev->mpNetDev->net );
-         return nRet;
-         #endif
-      }
-      else
-      {
-         #ifdef CONFIG_ANDROID
-         printk(KERN_INFO"Set Power Save Mode 0\n" );
-         #else
-         DBG( "Set Power Save Mode 0\n" );
-         #endif
-         SetCurrentSuspendStat(pGobiDev,0);
-      }
+      gobiSetPowerSaveMode(pGobiDev);
    }
    #ifdef CONFIG_ANDROID
    // It doesn't matter if this is autoresume or system resume
@@ -3260,7 +3242,11 @@ int GobiUSBNetProbe(
       WLDEBUG("device_wakeup_enable\n");
       device_wakeup_enable(&pIntf->dev);
       WLDEBUG("wakeup_source_register\n");
+      #if (LINUX_VERSION_CODE >= KERNEL_VERSION( 5,4,0 ))
+      ws = wakeup_source_register(NULL,szWakeSourceName);
+      #else
       ws = wakeup_source_register(szWakeSourceName);
+      #endif
       if (!ws)
          return -ENOMEM;
       rcu_assign_pointer(pGobiDev->ws, ws);
@@ -4032,4 +4018,8 @@ MODULE_PARM_DESC( wakelock_timeout, "-1 : 0 seconds, Number of second wakelock w
 module_param( resume_delay_ms, int, S_IRUGO | S_IWUSR );
 MODULE_PARM_DESC( resume_delay_ms, "1000(default) : Delay before resume in millisecond" );
 
+#ifdef CONFIG_ANDROID
+module_param( qmi_service_awake_timeout, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( qmi_service_awake_timeout, "-1 : 8 seconds, Number of second wakelock will be released after selected QMI servcie request send" );
+#endif
 

@@ -666,6 +666,11 @@ typedef struct sGobiUSBNet
    #ifdef CONFIG_PM
    bool bPrintResmeFromUserSpace;
    #endif
+   /*
+    * Workqueue and Delaywork to Process SetPowerSaveMode.
+    */
+   struct workqueue_struct *wqSetPowerSaveMode;
+   struct delayed_work dwSetPowerSaveMode;
 } sGobiUSBNet;
 
 /*=========================================================================*/

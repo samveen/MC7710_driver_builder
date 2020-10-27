@@ -4901,6 +4901,8 @@ ssize_t UserspaceWrite(
                        size + QMUXHeaderSize(),
                        pFilpData->mClientID );
 
+   StayAwakeOnService(pWriteBuffer,pFilpData->mpDev);
+
    kfree( pWriteBuffer );
    if(pFilpData!=NULL)
    if(IsDeviceDisconnect(pFilpData->mpDev))
@@ -9474,6 +9476,16 @@ int GobiInitWorkQueue(sGobiUSBNet *pGobiDev)
          return -1;
       }
    }
+   if(GenerateProcessName("gobisetpower",&szProcessName[0],MAX_WQ_PROC_NAME_SIZE-1,pGobiDev)!=0)
+   {
+      return -1;
+   }
+   pGobiDev->wqSetPowerSaveMode = create_workqueue(szProcessName);
+   if (!pGobiDev->wqSetPowerSaveMode)
+   {
+      printk("Create Work Queue SetPowerSaveMode Failed\n");
+      return -1;
+   }
    return 0;
 }
 
@@ -9509,6 +9521,7 @@ void GobiDestoryWorkQueue(sGobiUSBNet *pGobiDev)
    ClearPrivateWorkQueuesProcessByTableIndex(tableindex,
                   interfaceindex);
    GobiCancelwqNetDevWorkQueue(pGobiDev);
+   GobiCancelSetPowerSaveModeWorkQueue(pGobiDev);
 }
 
 /*===========================================================================
@@ -11224,7 +11237,8 @@ int gobi_sock_ioctl(u16 u16IPFamilfy, struct net_device *net, int cmd, unsigned 
    if (rc < 0)
    {
       printk(KERN_ERR"sock_create_kern:%d\n",rc);
-      return -ENODEV;   }
+      return -ENODEV;      
+   }
    sock_filp = gobi_sock_alloc_file(sock, &fd);
    if(!sock_filp)
    {
@@ -12458,5 +12472,158 @@ int ResetRcvReadEndpoints( sGobiUSBNet * pDev )
       return 0;
    }
    return -ENOMEM;
+}
+
+#ifdef CONFIG_ANDROID
+void gobiUnLockSystemSleepByTime(sGobiUSBNet *pGobiDev,int delay)
+{
+   WLDEBUG( "%s\n",__FUNCTION__);
+   GobiCancelUnLockSystemSleepWorkQueue(pGobiDev);
+   INIT_DELAYED_WORK(&pGobiDev->dwUnLockSystemSleep,
+            ProcessUnLockSystemSleepFunction);
+   queue_delayed_work(pGobiDev->wqUnLockSystemSleep, &pGobiDev->dwUnLockSystemSleep, delay);
+}
+#endif
+
+int StayAwakeOnService(void *pBuffer,sGobiUSBNet *pGobiDev)
+{
+   sQMUX_SRV *pQMux;
+   pQMux = (sQMUX_SRV*)pBuffer;
+   if(pQMux->qmux.mQMIService==QMIWDS)
+   {
+      if(WDS_START_NET==pQMux->mCMD)
+      {
+         #ifdef CONFIG_ANDROID
+         extern int qmi_service_awake_timeout;
+         unsigned long ref_time = DEFAULT_SERVICE_AWAKE_TIMEOUT;
+         DBG("SVC ID:0x%02x NO:0x%02x CMD:0x%04x \n",
+            pQMux->qmux.mQMIService,
+            pQMux->qmux.mQMIClientID,
+            pQMux->mCMD);
+         if(qmi_service_awake_timeout>=0)
+         {
+            ref_time = round_jiffies_relative(qmi_service_awake_timeout*HZ);
+         }
+         if(pGobiDev)
+         {
+            struct wakeup_source *ws = pGobiDev->ws;
+            PRINT_WS_LOCK(ws);
+            if(!ws->active)
+            {
+               DBG( "expire in %d ms\n",
+                  jiffies_to_msecs(ref_time));
+               gobiLockSystemSleep(pGobiDev);
+               gobiUnLockSystemSleepByTime(pGobiDev,ref_time);
+            }
+            else if( time_after_eq(ref_time, ws->timer_expires))
+            {
+               DBG( "expire in %d ms\n",
+                  jiffies_to_msecs(ref_time - ws->timer_expires));
+               gobiLockSystemSleep(pGobiDev);
+               gobiUnLockSystemSleepByTime(pGobiDev,ref_time - ws->timer_expires);
+            }
+         }
+         #endif
+      }
+   }
+   return 0;
+}
+/*===========================================================================
+ProcessSetPowerSaveMode
+
+   ProcessSetPowerSaveMode (Private Method)
+
+DESCRIPTION:
+   Work queue handler to SetPowerSaveMode.
+
+PARAMETERS:
+   w                 [ I ] - Pointer to work_struct pointer
+RETURN VALUE:
+   none
+===========================================================================*/
+static void ProcessSetPowerSaveMode(struct work_struct *w)
+{
+   struct delayed_work *dwork;
+   sGobiUSBNet *pGobiDev = NULL;
+   dwork = to_delayed_work(w);
+   pGobiDev = container_of(dwork, sGobiUSBNet, dwSetPowerSaveMode);
+   if(pGobiDev!=NULL)
+   {
+      DBG("\n");
+      if(SetPowerSaveMode(pGobiDev,0)<0)
+      {
+         printk(KERN_ERR" Resume Set Power Save Mode 0 error 1\n");
+         //Disable data traffic now
+         #ifdef CONFIG_ANDROID
+         SetCurrentSuspendStat(pGobiDev,1);
+         GobiClearDownReason( pGobiDev, DRIVER_SUSPENDED );
+         netif_carrier_off( pGobiDev->mpNetDev->net );
+         return ;
+         #endif
+      }
+      else
+      {
+         #ifdef CONFIG_ANDROID
+         printk(KERN_INFO"Set Power Save Mode 0\n" );
+         #else
+         DBG( "Set Power Save Mode 0\n" );
+         #endif
+         SetCurrentSuspendStat(pGobiDev,0);
+         #ifdef CONFIG_ANDROID
+         SetTxRxStat(pGobiDev,RESUME_RX_OKAY);
+         SetTxRxStat(pGobiDev,RESUME_TX_OKAY);
+         #endif
+      }
+   }
+   else
+   {
+      DBG("pGobiDev NULL\n");
+   }
+}
+
+/*===========================================================================
+GobiCancelSetPowerSaveModeWorkQueue
+
+   GobiCancelSetPowerSaveModeWorkQueue (Private Method)
+
+DESCRIPTION:
+   Cancel device SetPowerSaveMode work queue.
+
+PARAMETERS:
+   pGobiDev          [ I ] - pointer to sGobiUSBNet.
+RETURN VALUE:
+    none
+===========================================================================*/
+void GobiCancelSetPowerSaveModeWorkQueue(sGobiUSBNet *pGobiDev)
+{
+   if( (pGobiDev != NULL) && 
+      (pGobiDev->wqSetPowerSaveMode != NULL))
+   {
+      DBG("%s\n",__FUNCTION__);
+      GobiCancelDelayWorkWorkQueueWithoutUSBLockDevice(pGobiDev,
+         pGobiDev->wqSetPowerSaveMode,
+         &pGobiDev->dwSetPowerSaveMode);
+   }
+}
+
+/*===========================================================================
+gobiSetPowerSaveMode
+
+   gobiSetPowerSaveMode (Private Method)
+
+DESCRIPTION:
+   Add delayed work to wqSetPowerSaveMode.
+
+PARAMETERS:
+   pGobiDev                 [ I ] - Pointer to sGobiUSBNet pointer
+RETURN VALUE:
+   none
+===========================================================================*/
+void gobiSetPowerSaveMode(sGobiUSBNet *pGobiDev)
+{
+   GobiCancelSetPowerSaveModeWorkQueue(pGobiDev);
+   INIT_DELAYED_WORK(&pGobiDev->dwSetPowerSaveMode,
+            ProcessSetPowerSaveMode);
+   queue_delayed_work(pGobiDev->wqSetPowerSaveMode, &pGobiDev->dwSetPowerSaveMode, 0);
 }
 

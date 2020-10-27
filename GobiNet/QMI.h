@@ -277,6 +277,27 @@ typedef struct
    u8   event;
 }__attribute__((__packed__)) sQosFlow;
 
+
+/*=========================================================================*/
+// Struct sQMUX_SRV
+//
+//    Structure that defines a QMUX service header
+/*=========================================================================*/
+typedef struct sQMUX_SRV
+{
+   /* QMUX */
+   sQMUX qmux;
+
+   /* Transaction type*/
+   u8   mTranType;
+
+   /* TID */
+   u16        mTID;//__be16
+
+   /* CMD */
+   u16        mCMD;
+}__attribute__((__packed__)) sQMUX_SRV;
+
 /*=========================================================================*/
 // Generic QMUX functions
 /*=========================================================================*/

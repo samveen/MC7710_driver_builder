@@ -16,42 +16,42 @@ published by the Free Software Foundation.
 
 # Build Instructions
 
-- Extract driver tarball to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.62`:
+- Extract driver tarball to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.63`:
 ```
-sudo mkdir -p /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
-sudo tar -C /usr/src/SierraLinuxQMIdrivers-S2.42N2.62 -xvf SierraLinuxQMIdriversS2.42N2.62.tar.bz2
+sudo mkdir -p /usr/src/SierraLinuxQMIdrivers-S2.42N2.63
+sudo tar -C /usr/src/SierraLinuxQMIdrivers-S2.42N2.63 -xvf SierraLinuxQMIdriversS2.42N2.63.tar.bz2
 ```
 
-- Copy dkms.conf to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.62`:
+- Copy dkms.conf to `/usr/src/SierraLinuxQMIdrivers-S2.42N2.63`:
 ```
-sudo cp /usr/src/SierraLinuxQMIdrivers-S2.42N2.62/dkms/dkms.conf /usr/src/SierraLinuxQMIdrivers-S2.42N2.62/
+sudo cp /usr/src/SierraLinuxQMIdrivers-S2.42N2.63/dkms/dkms.conf /usr/src/SierraLinuxQMIdrivers-S2.42N2.63/
 ```
 
 - Add the modules to the DKMS tree:
 ```
-sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+sudo dkms add --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
 ```
 
 - Build the modules using DKMS:
 ```
-sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+sudo dkms build --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
 ```
 
 - Install the modules using DKMS:
 ```
-sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+sudo dkms install --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
 ```
 
 - Check status:
 ```
-sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
+sudo dkms status --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
 ```
 
 - Uninstall and remove source using DKMS:
 ```
-sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62
-sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.42N2.62 --all
-sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.42N2.62
+sudo dkms uninstall --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63
+sudo dkms remove --verbose -m SierraLinuxQMIdrivers -v S2.42N2.63 --all
+sudo rm -fR /usr/src/SierraLinuxQMIdrivers-S2.42N2.63
 ```
 
 ## Notes
