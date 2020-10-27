@@ -50,7 +50,8 @@ for f in $FILELIST; do
 done
 
 # Fix #define in file:
-sed -i 's/^\(#define MEMCG_NOT_FIX\)$/\/* \1 *\//' GobiNet/GobiUSBNet.c
+sed -i.bak 's/^\(#define MEMCG_NOT_FIX\)$/\/* \1 *\//' GobiNet/GobiUSBNet.c
+chmod --reference GobiNet/GobiUSBNet.c.bak GobiNet/GobiUSBNet.c
 
 export kernelver
 # build
@@ -67,6 +68,6 @@ make -C GobiSerial
 for f in $FILELIST; do
     sudo mv "${f}.bak" "${f}"
 done
-sed -i 's!^/\* \(#define MEMCG_NOT_FIX\) \*/$!\1!' GobiNet/GobiUSBNet.c
+mv GobiNet/GobiUSBNet.c.bak GobiNet/GobiUSBNet.c
 #make -C GobiNet clean
 #make -C GobiSerial clean
