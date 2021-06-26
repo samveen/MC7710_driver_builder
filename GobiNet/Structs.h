@@ -130,6 +130,8 @@ struct sGobiUSBNet;
 #define MAX_WS_NAME_SIZE 64
 #endif
 
+#define USE_DEFAULT_RT_PRIORITY -1
+
 /*=========================================================================*/
 // Struct sGobiPrivateWorkQueues
 //
@@ -505,6 +507,11 @@ enum{
    eNetDev_WQ_STATE_HANDLE_RESP,
 };
 
+enum{
+   eWDSCALLBACK_IPv4=0,
+   eWDSCALLBACK_IPv6=1,
+   eWDSCALLBACK_MAX=2,
+};
 /*=========================================================================*/
 // Struct sGobiUSBNet
 //
@@ -597,7 +604,7 @@ typedef struct sGobiUSBNet
    int iIsClosing;
    struct device *qcqmidev;
    struct device *dev;
-   u16 WDSClientID;
+   u16 WDSClientID[eWDSCALLBACK_MAX];
    u16 QMUXWDSCientID[MAX_MUX_NUMBER_SUPPORTED];
    int iNetLinkStatus;
    int iDataMode;

@@ -134,7 +134,7 @@ static inline __u8 ipv6_tclass2(const struct ipv6hdr *iph)
 //-----------------------------------------------------------------------------
 
 // Version Information
-#define DRIVER_VERSION "2020-06-19/SWI_2.63"
+#define DRIVER_VERSION "2020-08-17/SWI_2.64"
 #define DRIVER_AUTHOR "Qualcomm Innovation Center"
 #define DRIVER_DESC "GobiNet"
 #define QOS_HDR_LEN (6)
@@ -157,6 +157,12 @@ int wakelock_debug=0;
 int wakelock_timeout=-1;
 int qmi_service_awake_timeout=-1;
 #endif
+
+int rt_local_priority = USE_DEFAULT_RT_PRIORITY;
+int rt_main_priority = USE_DEFAULT_RT_PRIORITY;
+int rt_default_priority = USE_DEFAULT_RT_PRIORITY;
+
+
 
 int resume_delay_ms = 1000;
 /*
@@ -3005,7 +3011,8 @@ int GobiUSBNetProbe(
    }
    atomic_set( &pGobiDev->mAutoPM.mURBListLen, 0 );
    pGobiDev->tx_qlen  = 0;
-   pGobiDev->WDSClientID = (u16)-1;
+   pGobiDev->WDSClientID[eWDSCALLBACK_IPv4] = (u16)-1;
+   pGobiDev->WDSClientID[eWDSCALLBACK_IPv6] = (u16)-1;
    pGobiDev->iDataMode = eDataMode_Ethernet;
    pDev->data[0] = (unsigned long)pGobiDev;
    pGobiDev->iUSBState = USB_STATE_ATTACHED;
@@ -4023,3 +4030,11 @@ module_param( qmi_service_awake_timeout, int, S_IRUGO | S_IWUSR );
 MODULE_PARM_DESC( qmi_service_awake_timeout, "-1 : 8 seconds, Number of second wakelock will be released after selected QMI servcie request send" );
 #endif
 
+module_param( rt_local_priority, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( rt_local_priority, "-1(default) : ROUTE_TABLE_LOCAL_PRIORITY: 0, local lookup priority number" );
+
+module_param( rt_main_priority, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( rt_main_priority, "-1(default) : ROUTE_TABLE_MAIN_PRIORITY: 1, main lookup priority number" );
+
+module_param( rt_default_priority, int, S_IRUGO | S_IWUSR );
+MODULE_PARM_DESC( rt_default_priority, "-1(default) : ROUTE_TABLE_DEFAULT_PRIORITY: 32767, default lookup priority number" );

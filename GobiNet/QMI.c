@@ -2466,7 +2466,7 @@ int QMIWDSSetIPFamilyReq(
    u16      transactionID,
    u8       u8Value)
 {
-   if (pBuffer == 0 || buffSize < QMIWDSSetQMuxIDReqSize() )
+   if (pBuffer == 0 || buffSize < QMIWDSSetIPFamilyReqSize() )
    {
       return -ENOMEM;
    }

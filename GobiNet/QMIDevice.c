@@ -166,6 +166,9 @@ extern int interruptible;
 extern int iTEEnable;
 extern void *gobi_skb_push(struct sk_buff *pSKB, unsigned int len);
 const bool clientmemdebug = 0;
+extern int rt_local_priority;
+extern int rt_main_priority;
+extern int rt_default_priority;
 enum {
  eNotifyListEmpty=-1,
  eNotifyListNotFound=0,
@@ -256,6 +259,16 @@ if(pGobiDev->bPrintResmeFromUserSpace)\
    DBG("RESUME FROM SUSPEND\n");\
    pGobiDev->bPrintResmeFromUserSpace = false;\
 }
+
+#define RETURN_PUT_INTERFACE(pDev,ret)\
+if( !( (pDev==NULL) || \
+       isModuleUnload(pDev) || \
+       IsDeviceDisconnect(pDev) || \
+       (pDev->mbUnload >= eStatUnloading) ) )\
+{\
+   gobi_usb_autopm_put_interface( pDev->mpIntf );\
+}\
+return ret;
 
 /* initially all zero */
 int qcqmi_table[MAX_QCQMI];
@@ -2506,17 +2519,17 @@ int WriteSync(
       if(isModuleUnload(pDev))
       {
          DBG( "unloaded\n" );
-         return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev,-EFAULT);
       }
       if(IsDeviceDisconnect(pDev))
       {
          DBG( "Device Disconnected!\n" );
-         return -ENXIO;
+         RETURN_PUT_INTERFACE(pDev,-ENXIO);
       }
       pDev->iShutdown_read_sem= __LINE__;
       if(signal_pending(current))
       {
-         return -ERESTARTSYS;
+         RETURN_PUT_INTERFACE(pDev,-ERESTARTSYS);
       }
 
       iLockRetry = 0;
@@ -2528,22 +2541,22 @@ int WriteSync(
          if(iLockRetry++>100)
          {
             DBG("down_read_trylock timeout");
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev,-EFAULT);
          }
          if(pDev==NULL)
          {
             DBG( "NULL\n" );
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev,-EFAULT);
          }
          if (pDev->mbUnload >= eStatUnloading)
          {
             DBG( "unloaded\n" );
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev,-EFAULT);
          }
          if(IsDeviceDisconnect(pDev))
          {
             DBG( "Device Disconnected!\n" );
-            return -ENXIO;
+            RETURN_PUT_INTERFACE(pDev,-ENXIO);
          }
       }
       mb();
@@ -2556,22 +2569,22 @@ int WriteSync(
        up_read(&pDev->shutdown_rwsem);
        if(signal_pending(current))
        {
-          return -ERESTARTSYS;
+          RETURN_PUT_INTERFACE(pDev,-ERESTARTSYS);
        }
        if(pDev==NULL)
        {
-          return -EFAULT;
+          RETURN_PUT_INTERFACE(pDev,-EFAULT);
        }
        if (IsDeviceDisconnect(pDev) )
        {
-         return -ENXIO;
+          RETURN_PUT_INTERFACE(pDev,-ENXIO);
        }
        pDev->iShutdown_read_sem=- __LINE__;
        
        if (pDev->mbUnload >= eStatUnloading)
        {
           DBG( "unloaded\n" );
-          return -EFAULT;
+          RETURN_PUT_INTERFACE(pDev,-EFAULT);
        }
 
        if (signal_pending(current))
@@ -2596,7 +2609,7 @@ int WriteSync(
           {
             pDev->iUSBState = USB_STATE_NOTATTACHED;
           }
-          return result;
+          RETURN_PUT_INTERFACE(pDev,result);
        }
        else
        {
@@ -2605,17 +2618,17 @@ int WriteSync(
        if (IsDeviceValid( pDev ) == false)
        {
           DBG( "%s Invalid device!\n" ,__FUNCTION__);
-          return -ENXIO;
+          RETURN_PUT_INTERFACE(pDev,-ENXIO);
        }
        if(IsDeviceDisconnect(pDev))
        {
           DBG( "Device Disconnected!\n" );
-          return -ENXIO;
+          RETURN_PUT_INTERFACE(pDev,-ENXIO);
        }
        if (pDev->mbUnload > eStatUnloading)
        {
          DBG( "unloaded\n" );
-         return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev,-EFAULT);
        }
    }
 
@@ -5698,8 +5711,8 @@ int RegisterQMIDevice( sGobiUSBNet * pDev, int is9x15 )
    i=0;
    do
    {
-      // Setup WDS callback
-      result = SetupQMIWDSCallback( pDev , 0 );
+      // Setup WDS IPv4 callback
+      result = SetupQMIWDSCallback( pDev , 4 );
       RETURN_WHEN_DEVICE_ERR(pDev);
       if (result != 0)
       {
@@ -5709,7 +5722,21 @@ int RegisterQMIDevice( sGobiUSBNet * pDev, int is9x15 )
          }
       }
    }while(result!=0);
-
+   i=0;
+   do
+   {
+      // Setup WDS IPv6 callback
+      result = SetupQMIWDSCallback( pDev , 6 );
+      RETURN_WHEN_DEVICE_ERR(pDev);
+      if (result != 0)
+      {
+         if(i++>MAX_RETRY)
+         {
+            printk(KERN_WARNING "Setup IPv6 WDS callback failed!\n" );\
+            break;
+         }
+      }
+   }while(result!=0);
    if (is9x15)
    {
        // Set FCC Authentication
@@ -5818,7 +5845,7 @@ int RegisterQMIDevice( sGobiUSBNet * pDev, int is9x15 )
        return -ENOMEM;
    }
 
-  if( (pDev->iIPAlias==0) || 
+  if( (pDev->iQMUXEnable) ||
       (pDev->u8AutoIPEnable) )
   {
       for(i=0;i<pDev->iMaxMuxID;i++)
@@ -5829,7 +5856,8 @@ int RegisterQMIDevice( sGobiUSBNet * pDev, int is9x15 )
   if( (pDev->bLinkState) &&
       (pDev->u8AutoIPEnable) )
   {
-      SendGetRuntimesettings(pDev,pDev->WDSClientID);
+      SendGetRuntimesettings(pDev,pDev->WDSClientID[eWDSCALLBACK_IPv4]);
+      SendGetRuntimesettings(pDev,pDev->WDSClientID[eWDSCALLBACK_IPv6]);
       if(pDev->iQMUXEnable)
       {
          for(i=0;i<pDev->iMaxMuxID;i++)
@@ -6278,9 +6306,15 @@ void DeregisterQMIDevice( sGobiUSBNet * pDev )
    // Stop all reads
    KillRead( pDev );
    wait_interrupt();
-   GobiDestoryWorkQueue(pDev);   
-   if(pDev->WDSClientID!=(u16)-1)
-   ReleaseClientID( pDev, pDev->WDSClientID );
+   GobiDestoryWorkQueue(pDev);
+   for(i=0;i<eWDSCALLBACK_MAX;i++)
+   {
+      if(pDev->WDSClientID[i]!=(u16)-1)
+      {
+         ReleaseClientID( pDev, pDev->WDSClientID[i] );
+      }
+   }
+
    for(i=0;i<MAX_MUX_NUMBER_SUPPORTED;i++)
    {
       if(pDev->QMUXWDSCientID[i] !=(u16)-1)
@@ -6873,7 +6907,11 @@ void QMIWDSCallback(
             }
          }
       }
-      if(pDev->WDSClientID == clientID)
+      if(pDev->WDSClientID[eWDSCALLBACK_IPv4] == clientID)
+      {
+         DBG( "clientID :0x%04x\n", clientID);
+      }
+      else if(pDev->WDSClientID[eWDSCALLBACK_IPv6] == clientID)
       {
          DBG( "clientID :0x%04x\n", clientID);
       }
@@ -7009,8 +7047,8 @@ RETURN VALUE:
 int SetupQMIWDSCallback( sGobiUSBNet * pDev  ,u8 QMUXID)
 {
    int result;
-   void * pWriteBuffer;
-   u16 writeBufferSize;
+   void * pWriteBuffer=NULL;
+   u16 writeBufferSize = 0;
    u16 WDSClientID;
    u16 tid = 1+QMUXID;
 
@@ -7027,10 +7065,46 @@ int SetupQMIWDSCallback( sGobiUSBNet * pDev  ,u8 QMUXID)
       pDev->QMUXWDSCientID[QMUXID-MUX_ID_START] = WDSClientID = result;
       DBG( "MUXID:0x%02x, WDSClientID:0x%04x\n",QMUXID, WDSClientID);
    }
+   else if ( (QMUXID == 6) ||
+             (QMUXID == 4) )
+   {
+      u8 index = (QMUXID==6) ? eWDSCALLBACK_IPv6: eWDSCALLBACK_IPv4;
+      pDev->WDSClientID[index] = WDSClientID = result;
+      DBG("IPv%s WDSClientID:0x%04x",QMUXID==6? "6":"4",WDSClientID);
+      //Set IP family
+      writeBufferSize = QMIWDSSetIPFamilyReqSize();
+      pWriteBuffer = kmalloc( writeBufferSize, GOBI_GFP_KERNEL );
+      if (pWriteBuffer == NULL)
+      {
+         return -ENOMEM;
+      }
+      DBG("Set IPv%s",(QMUXID==6) ? "6" : "4");
+      result = QMIWDSSetIPFamilyReq( pWriteBuffer,
+                                        writeBufferSize,
+                                        tid++ ,
+                                        (QMUXID==6) ? 0x06 : 0x04);
+      if (result < 0)
+      {
+         kfree( pWriteBuffer );
+         DBG("Set IPv%s Failed %d",
+            (QMUXID==6) ? "6" : "4",
+            result);
+         return result;
+      }
+      result = WriteSync( pDev,
+                       pWriteBuffer,
+                       writeBufferSize,
+                       WDSClientID );
+      kfree( pWriteBuffer );
+      if (result < 0)
+      {
+         return result;
+      }
+   }
    else
    {
-      pDev->WDSClientID = WDSClientID = result;
-      DBG("WDSClientID:0x%04x",WDSClientID);
+      printk(KERN_ERR "%s Invalid argument\n",__FUNCTION__);
+      return -EINVAL;
    }
    // QMI WDS Set QMUX ID
    if(QMUXID>=MUX_ID_START)
@@ -8271,12 +8345,12 @@ int WriteSyncNoResume(
       if(isModuleUnload(pDev))
       {
          DBG( "unloaded\n" );
-         return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev, -EFAULT);
       }
       pDev->iShutdown_read_sem= __LINE__;
       if(signal_pending(current))
       {
-         return -ERESTARTSYS;
+         RETURN_PUT_INTERFACE(pDev, -ERESTARTSYS);
       }
 
       iLockRetry = 0;
@@ -8288,17 +8362,17 @@ int WriteSyncNoResume(
          if(iLockRetry++>100)
          {
             DBG("down_read_trylock timeout");
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev, -EFAULT);
          }
          if(pDev==NULL)
          {
             DBG( "NULL\n" );
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev, -EFAULT);
          }
          if (pDev->mbUnload >= eStatUnloading)
          {
             DBG( "unloaded\n" );
-            return -EFAULT;
+            RETURN_PUT_INTERFACE(pDev, -EFAULT);
          }
       }
       mb();
@@ -8311,15 +8385,15 @@ int WriteSyncNoResume(
        up_read(&pDev->shutdown_rwsem);
        if(signal_pending(current))
        {
-          return -ERESTARTSYS;
+          RETURN_PUT_INTERFACE(pDev, -ERESTARTSYS);
        }
        if (IsDeviceDisconnect(pDev) )
        {
-         return -ENXIO;
+          RETURN_PUT_INTERFACE(pDev, -ENXIO);
        }
        if(pDev==NULL)
        {
-          return -EFAULT;
+          RETURN_PUT_INTERFACE(pDev, -EFAULT);
        }
        
        pDev->iShutdown_read_sem=- __LINE__;
@@ -8327,12 +8401,12 @@ int WriteSyncNoResume(
        if (pDev->mbUnload >= eStatUnloading)
        {
           DBG( "unloaded\n" );
-          return -EFAULT;
+          RETURN_PUT_INTERFACE(pDev, -EFAULT);
        }
 
        if (signal_pending(current))
        {
-           return -ERESTARTSYS;
+           RETURN_PUT_INTERFACE(pDev,-ERESTARTSYS);
        }
 
        if (result < 0)
@@ -8352,7 +8426,7 @@ int WriteSyncNoResume(
           {
             pDev->iUSBState = USB_STATE_NOTATTACHED;
           }
-           return result;
+           RETURN_PUT_INTERFACE(pDev, result);
        }
        else
        {
@@ -8361,12 +8435,12 @@ int WriteSyncNoResume(
        if (IsDeviceValid( pDev ) == false)
        {
           DBG( "%s Invalid device!\n" ,__FUNCTION__);
-          return -ENXIO;
+          RETURN_PUT_INTERFACE(pDev, -ENXIO);
        }
        if (pDev->mbUnload > eStatUnloading)
        {
          DBG( "unloaded\n" );
-         return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev,-EFAULT);
        }
    }
 
@@ -8621,17 +8695,17 @@ int WriteSyncNoRetry(
      if(iLockRetry++>100)
      {
         DBG("down_read_trylock timeout");
-        return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev, -EFAULT);
      }
      if(pDev==NULL)
      {
         DBG( "NULL\n" );
-        return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev, -EFAULT);
      }
      if (pDev->mbUnload >= eStatUnloading)
      {
         DBG( "unloaded\n" );
-        return -EFAULT;
+         RETURN_PUT_INTERFACE(pDev, -EFAULT);
      }
   }
   mb();
@@ -8644,15 +8718,15 @@ int WriteSyncNoRetry(
    up_read(&pDev->shutdown_rwsem);
    if(signal_pending(current))
    {
-      return -ERESTARTSYS;
+       RETURN_PUT_INTERFACE(pDev, -ERESTARTSYS);
    }
    if (IsDeviceDisconnect(pDev) )
    {
-      return -ENXIO;
+       RETURN_PUT_INTERFACE(pDev,-ENXIO);
    }
    if(pDev==NULL)
    {
-      return -EFAULT;
+       RETURN_PUT_INTERFACE(pDev, -EFAULT);
    }
    
    pDev->iShutdown_read_sem=- __LINE__;
@@ -8660,7 +8734,7 @@ int WriteSyncNoRetry(
    if (pDev->mbUnload >= eStatUnloading)
    {
       DBG( "unloaded\n" );
-      return -EFAULT;
+       RETURN_PUT_INTERFACE(pDev, -EFAULT);
    }
    if (result < 0)
    {
@@ -10957,6 +11031,10 @@ int SendGetRuntimesettings( sGobiUSBNet *pDev  ,u16 WDSClientID)
    {
       return -ENODEV;
    }
+   if(WDSClientID==(u16)-1)
+   {
+      return -EINVAL;
+   }
    if(!pDev->mQMIDev.proc_file)
    {
       DBG("QMI NOT READY 0x%04x!\n",WDSClientID);
@@ -11314,7 +11392,14 @@ int iGetAdaptorName(
       return -EFAULT;
    if(!pAdaptorName)
       return -EFAULT;
-   if(ClientID == pDev->WDSClientID)
+
+   if(ClientID == pDev->WDSClientID[eWDSCALLBACK_IPv4])
+   {
+      strncpy(pAdaptorName,pDev->mpNetDev->net->name,IFNAMSIZ);
+      DBG("CID WDSClientID FOUND:0x%04x %s\n",ClientID,pAdaptorName);
+      return 0;
+   }
+   if(ClientID == pDev->WDSClientID[eWDSCALLBACK_IPv6])
    {
       strncpy(pAdaptorName,pDev->mpNetDev->net->name,IFNAMSIZ);
       DBG("CID WDSClientID FOUND:0x%04x %s\n",ClientID,pAdaptorName);
@@ -11387,7 +11472,11 @@ struct net_device* GetAdaptorByClientID(
       return NULL;
    }
 
-   if(ClientID == pDev->WDSClientID)
+   if(ClientID == pDev->WDSClientID[eWDSCALLBACK_IPv4])
+   {
+      return pDev->mpNetDev->net;
+   }
+   if(ClientID == pDev->WDSClientID[eWDSCALLBACK_IPv6])
    {
       return pDev->mpNetDev->net;
    }
@@ -11445,7 +11534,7 @@ void UpdateIPv4Table(
       return ;
    }
 
-   if(pDev->WDSClientID == ClientID)
+   if(pDev->WDSClientID[eWDSCALLBACK_IPv4] == ClientID)
    {
       pDev->qMuxAutoIP.instance = 0;
       pDev->qMuxAutoIP.ipAddress = ntohl(u32Address);
@@ -11504,7 +11593,7 @@ void UpdateIPv6Table(
       return ;
    }
 
-   if(pDev->WDSClientID == ClientID)
+   if(pDev->WDSClientID[eWDSCALLBACK_IPv6] == ClientID)
    {
       pDev->qMuxAutoIP.instance = 0;
       memcpy(&pDev->qMuxAutoIP.ipV6Address.ipv6addr[0],
@@ -11597,7 +11686,7 @@ int gobi_fib_rule(struct net_device *dev, __u8 family, bool add_it,u32 priority)
    struct nlmsghdr *nlh;
    struct sk_buff *skb;
    int err;
-
+   u32 rpriority = priority;
    if (family != AF_INET)
       return 0;
 
@@ -11619,17 +11708,26 @@ int gobi_fib_rule(struct net_device *dev, __u8 family, bool add_it,u32 priority)
    if(priority==ROUTE_TABLE_LOCAL_PRIORITY)
    {
       frh->table = RT_TABLE_LOCAL;
+      rpriority = (rt_local_priority == USE_DEFAULT_RT_PRIORITY) ? 
+                    ROUTE_TABLE_LOCAL_PRIORITY : 
+                    rt_local_priority;
    }
    else if(priority==ROUTE_TABLE_MAIN_PRIORITY)
    {
       frh->table = RT_TABLE_MAIN;
+      rpriority = (rt_main_priority == USE_DEFAULT_RT_PRIORITY) ? 
+                    ROUTE_TABLE_MAIN_PRIORITY : 
+                    rt_main_priority;
    }
    else if(priority==ROUTE_TABLE_DEFAULT_PRIORITY)
    {
       frh->table = RT_TABLE_DEFAULT;
+      rpriority = (rt_default_priority == USE_DEFAULT_RT_PRIORITY) ? 
+                    ROUTE_TABLE_DEFAULT_PRIORITY : 
+                    rt_default_priority;
    }
 
-   if (nla_put_u32(skb, FRA_PRIORITY, priority))
+   if (nla_put_u32(skb, FRA_PRIORITY, rpriority))
       goto gobi_nla_put_failure;
 
    nlmsg_end(skb, nlh);
@@ -11662,7 +11760,7 @@ gobi_nla_put_failure:
          printk(KERN_INFO "ip rule add from all lookup main priority %d\n",priority);
          return 0;
       case ROUTE_TABLE_DEFAULT_PRIORITY:
-         printk(KERN_INFO "ip rule add from all lookup main priority %d\n",priority);
+         printk(KERN_INFO "ip rule add from all lookup default priority %d\n",priority);
          return 0;
       default:
          break;
@@ -12267,9 +12365,14 @@ void PrintActiveWDSCID(sGobiUSBNet *pDev  ,u16 WDSClientID)
 {
    if(pDev)
    {
-      if(pDev->WDSClientID==WDSClientID)
+      if(pDev->WDSClientID[eWDSCALLBACK_IPv4] == WDSClientID)
       {
-         DBG("WDSClientID: 0x%04x\n",WDSClientID);
+         DBG("IPv4 WDSClientID: 0x%04x\n",WDSClientID);
+         return ;
+      }
+      else if(pDev->WDSClientID[eWDSCALLBACK_IPv6] == WDSClientID)
+      {
+         DBG("IPv6 WDSClientID: 0x%04x\n",WDSClientID);
          return ;
       }
       else
@@ -12568,7 +12671,9 @@ static void ProcessSetPowerSaveMode(struct work_struct *w)
          #else
          DBG( "Set Power Save Mode 0\n" );
          #endif
+         #ifdef CONFIG_PM
          SetCurrentSuspendStat(pGobiDev,0);
+         #endif
          #ifdef CONFIG_ANDROID
          SetTxRxStat(pGobiDev,RESUME_RX_OKAY);
          SetTxRxStat(pGobiDev,RESUME_TX_OKAY);
